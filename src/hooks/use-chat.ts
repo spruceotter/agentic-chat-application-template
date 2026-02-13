@@ -45,7 +45,8 @@ async function readSSEStream(
       }
       const data = line.slice(6);
       if (data === "[DONE]") {
-        return accumulated;
+        // Don't return yet — keep reading for our custom done event with scene data
+        continue;
       }
       try {
         const parsed = JSON.parse(data) as {
