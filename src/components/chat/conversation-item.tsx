@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Heart, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import { useCallback, useRef, useState } from "react";
 
@@ -97,7 +97,12 @@ export function ConversationItem({
       )}
     >
       <button type="button" className="flex-1 truncate text-left" onClick={() => onSelect(id)}>
-        {title}
+        <span className="flex items-center gap-1.5">
+          {title.startsWith("Date: ") && (
+            <Heart className="size-3 shrink-0 fill-pink-500 text-pink-500" />
+          )}
+          <span className="truncate">{title}</span>
+        </span>
       </button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

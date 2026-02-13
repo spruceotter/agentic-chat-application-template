@@ -11,26 +11,54 @@ export interface StoryboardScene {
   sceneDescription: string;
 }
 
+const POLL_INTERVAL_MS = 3000;
+const MAX_POLL_ATTEMPTS = 40; // ~2 minutes max
+
 export function useStoryboard(conversationId: string | null) {
   const [currentScene, setCurrentScene] = useState<StoryboardScene | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Use refs to avoid stale closures and track active state
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollCountRef = useRef(0);
+  const activeConversationRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+
+  // Keep activeConversationRef in sync
+  useEffect(() => {
+    activeConversationRef.current = conversationId;
+  }, [conversationId]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const stopPolling = useCallback(() => {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
+    pollCountRef.current = 0;
     setIsGenerating(false);
   }, []);
 
   // Poll Leonardo for image completion
   const pollForImage = useCallback(
-    async (sceneId: string) => {
+    async (sceneId: string, forConversationId: string) => {
       try {
         const res = await fetch(`/api/storyboard/scenes/${sceneId}/poll`, {
           method: "POST",
         });
+
+        // Guard: don't update state if conversation changed or component unmounted
+        if (!mountedRef.current || activeConversationRef.current !== forConversationId) {
+          return;
+        }
+
         if (!res.ok) {
           return;
         }
@@ -49,63 +77,80 @@ export function useStoryboard(conversationId: string | null) {
 
   // Start polling for a specific scene
   const startPolling = useCallback(
-    (sceneId: string) => {
+    (sceneId: string, forConversationId: string) => {
+      // Always stop any existing poll first
       stopPolling();
       setIsGenerating(true);
+      pollCountRef.current = 0;
 
-      // Poll immediately, then every 3 seconds
-      void pollForImage(sceneId);
+      // Poll immediately
+      void pollForImage(sceneId, forConversationId);
+
+      // Then poll on interval with max attempts
       pollIntervalRef.current = setInterval(() => {
-        void pollForImage(sceneId);
-      }, 3000);
+        pollCountRef.current += 1;
+        if (pollCountRef.current >= MAX_POLL_ATTEMPTS) {
+          stopPolling();
+          return;
+        }
+        void pollForImage(sceneId, forConversationId);
+      }, POLL_INTERVAL_MS);
     },
     [stopPolling, pollForImage],
   );
 
   // Fetch latest scene when conversation changes
-  const refreshScene = useCallback(async () => {
+  useEffect(() => {
     if (!conversationId) {
       setCurrentScene(null);
       stopPolling();
       return;
     }
 
-    try {
-      const res = await fetch(`/api/storyboard/conversations/${conversationId}/latest`);
-      if (!res.ok) {
-        return;
-      }
-      const data = (await res.json()) as { scene: StoryboardScene | null };
-      if (data.scene) {
-        setCurrentScene(data.scene);
-        if (data.scene.status === "generating") {
-          startPolling(data.scene.id);
-        }
-      }
-    } catch {
-      // Ignore fetch errors
-    }
-  }, [conversationId, stopPolling, startPolling]);
+    const fetchConversationId = conversationId;
 
-  // Fetch latest scene when conversation changes
-  useEffect(() => {
-    if (conversationId) {
-      void refreshScene();
-    } else {
-      setCurrentScene(null);
-      stopPolling();
-    }
+    const fetchLatest = async () => {
+      try {
+        const res = await fetch(`/api/storyboard/conversations/${fetchConversationId}/latest`);
+
+        // Guard against stale fetch
+        if (!mountedRef.current || activeConversationRef.current !== fetchConversationId) {
+          return;
+        }
+
+        if (!res.ok) {
+          return;
+        }
+        const data = (await res.json()) as { scene: StoryboardScene | null };
+        if (data.scene) {
+          setCurrentScene(data.scene);
+          if (data.scene.status === "generating") {
+            startPolling(data.scene.id, fetchConversationId);
+          }
+        } else {
+          setCurrentScene(null);
+        }
+      } catch {
+        // Ignore fetch errors
+      }
+    };
+
+    void fetchLatest();
 
     return () => {
       stopPolling();
     };
-  }, [conversationId, refreshScene, stopPolling]);
+  }, [conversationId, startPolling, stopPolling]);
 
   // Handle new scene from SSE done event
   const handleNewScene = useCallback(
     (sceneData: { sceneId?: string; mood?: string; thought?: string }) => {
+      const currentConvId = activeConversationRef.current;
+      if (!currentConvId) {
+        return;
+      }
+
       if (sceneData.sceneId) {
-        // Set initial scene state from SSE data
         const sceneId = sceneData.sceneId;
         setCurrentScene((prev) => ({
           id: sceneId,
@@ -115,7 +160,7 @@ export function useStoryboard(conversationId: string | null) {
           status: "generating",
           sceneDescription: prev?.sceneDescription ?? "",
         }));
-        startPolling(sceneData.sceneId);
+        startPolling(sceneId, currentConvId);
       } else if (sceneData.mood) {
         // Update mood/thought even without a new scene image
         setCurrentScene((prev) =>
@@ -135,7 +180,6 @@ export function useStoryboard(conversationId: string | null) {
   return {
     currentScene,
     isGenerating,
-    refreshScene,
     handleNewScene,
   };
 }

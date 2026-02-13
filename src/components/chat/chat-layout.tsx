@@ -34,6 +34,28 @@ export function ChatLayout() {
 
   const { currentScene, isGenerating, handleNewScene } = useStoryboard(activeConversationId);
 
+  // Restore archetypeId when switching to a Date Night conversation
+  useEffect(() => {
+    if (!activeConversationId) {
+      return;
+    }
+    const convo = conversations.find((c) => c.id === activeConversationId);
+    if (!convo) {
+      return;
+    }
+    // Date Night conversations are titled "Date: <Name>"
+    if (convo.title.startsWith("Date: ")) {
+      const name = convo.title.slice(6);
+      const archetype = ARCHETYPES.find((a) => a.name === name);
+      if (archetype) {
+        setArchetypeId(archetype.id);
+        return;
+      }
+    }
+    // Not a Date Night conversation — clear archetype
+    setArchetypeId(null);
+  }, [activeConversationId, conversations, setArchetypeId]);
+
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   // Look up the selected archetype for its preview image
@@ -140,9 +162,6 @@ export function ChatLayout() {
         {/* Show input at bottom when no messages and not in loading state */}
         {!hasMessages && !isLoadingMessages && (
           <div className="p-4">
-            <div className="text-muted-foreground text-center text-xs">
-              Or type a message below for regular chat
-            </div>
             <ChatInput onSend={sendMessage} disabled={isStreaming} />
           </div>
         )}
