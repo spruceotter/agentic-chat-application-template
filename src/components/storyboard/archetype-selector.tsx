@@ -58,12 +58,12 @@ export function ArchetypeSelector({ onSelect }: ArchetypeSelectorProps) {
   return (
     <div className="flex flex-1 flex-col items-center overflow-y-auto">
       {/* Hero header */}
-      <div className="relative w-full bg-gradient-to-b from-pink-500/10 via-purple-500/5 to-transparent px-4 pt-10 pb-6">
+      <div className="relative w-full bg-gradient-to-b from-pink-500/10 via-purple-500/5 to-transparent px-4 pt-6 pb-4 sm:pt-10 sm:pb-6">
         <div className="mx-auto max-w-2xl text-center">
-          <h1 className="bg-gradient-to-r from-pink-400 via-rose-400 to-red-400 bg-clip-text text-4xl font-black tracking-tight text-transparent sm:text-5xl">
+          <h1 className="bg-gradient-to-r from-pink-400 via-rose-400 to-red-400 bg-clip-text text-3xl font-black tracking-tight text-transparent sm:text-5xl">
             Date Night
           </h1>
-          <p className="mt-3 text-sm text-white/40">
+          <p className="mt-2 text-xs text-white/40 sm:mt-3 sm:text-sm">
             Choose your date. Survive the evening. Try not to fall in love.
           </p>
         </div>
@@ -96,8 +96,8 @@ export function ArchetypeSelector({ onSelect }: ArchetypeSelectorProps) {
       </div>
 
       {/* Character grid */}
-      <div className="w-full max-w-3xl px-6 pb-8">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="w-full max-w-3xl px-3 pb-6 sm:px-6 sm:pb-8">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-4 sm:grid-cols-4">
           {filtered.map((archetype) => (
             <CharacterCard
               key={archetype.id}

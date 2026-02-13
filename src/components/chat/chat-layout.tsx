@@ -8,6 +8,7 @@ import { useChat } from "@/hooks/use-chat";
 import { useStoryboard } from "@/hooks/use-storyboard";
 
 import { ArchetypeSelector } from "../storyboard/archetype-selector";
+import { MobileSceneStrip } from "../storyboard/mobile-scene-strip";
 import { StoryboardViewport } from "../storyboard/storyboard-viewport";
 import { ChatHeader } from "./chat-header";
 import { ChatInput } from "./chat-input";
@@ -137,9 +138,18 @@ export function ChatLayout() {
             </div>
           </div>
         ) : hasMessages ? (
-          <div className="flex flex-1 overflow-hidden">
+          <div className="flex flex-1 flex-col overflow-hidden md:flex-row">
+            {/* Mobile scene strip — visible only on small screens */}
+            {isDateNightMode && displayScene && (
+              <div className="md:hidden">
+                <MobileSceneStrip scene={displayScene} isGenerating={isGenerating} />
+              </div>
+            )}
+
             {/* Chat panel */}
-            <div className={`flex flex-col ${isDateNightMode ? "w-[55%]" : "flex-1"}`}>
+            <div
+              className={`flex min-h-0 flex-1 flex-col ${isDateNightMode ? "md:w-[55%] md:flex-initial" : ""}`}
+            >
               <MessageList
                 messages={messages}
                 streamingContent={streamingContent}
@@ -148,7 +158,7 @@ export function ChatLayout() {
               <ChatInput onSend={sendMessage} disabled={isStreaming} />
             </div>
 
-            {/* Storyboard viewport — only in Date Night mode */}
+            {/* Storyboard viewport — desktop only */}
             {isDateNightMode && (
               <div className="border-border hidden w-[45%] border-l md:block">
                 <StoryboardViewport scene={displayScene} isGenerating={isGenerating} />
