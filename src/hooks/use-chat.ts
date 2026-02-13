@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { ARCHETYPES } from "@/features/storyboard/constants";
+
 import { useLocalStorage } from "./use-local-storage";
 
 interface ChatMessage {
@@ -14,9 +16,16 @@ interface ChatMessage {
   updatedAt: string;
 }
 
+export interface SceneEvent {
+  sceneId?: string;
+  mood?: string;
+  thought?: string;
+}
+
 async function readSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onChunk: (accumulated: string) => void,
+  onScene?: (scene: SceneEvent) => void,
 ): Promise<string> {
   const decoder = new TextDecoder();
   let accumulated = "";
@@ -43,12 +52,17 @@ async function readSSEStream(
           content?: string;
           type?: string;
           message?: string;
+          scene?: SceneEvent;
         };
         if (parsed.type === "error") {
           toast.error(parsed.message ?? "Response may not have been saved");
           continue;
         }
         if (parsed.type === "done") {
+          // Capture scene data from the done event
+          if (parsed.scene && onScene) {
+            onScene(parsed.scene);
+          }
           continue;
         }
         if (parsed.content) {
@@ -75,6 +89,17 @@ function makeTempMessage(conversationId: string, role: string, content: string):
   };
 }
 
+/**
+ * Strip [SCENE: ...], [MOOD: ...], [THOUGHT: ...] metadata tags from content for display.
+ */
+function stripMetadataTags(content: string): string {
+  return content
+    .replace(/\[SCENE:\s*[\s\S]*?\]/g, "")
+    .replace(/\[MOOD:\s*[\s\S]*?\]/g, "")
+    .replace(/\[THOUGHT:\s*[\s\S]*?\]/g, "")
+    .trim();
+}
+
 export function useChat() {
   const {
     items: conversations,
@@ -87,8 +112,10 @@ export function useChat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [archetypeId, setArchetypeId] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const skipNextFetchRef = useRef(false);
+  const onSceneRef = useRef<((scene: SceneEvent) => void) | null>(null);
 
   useEffect(() => {
     if (!activeConversationId) {
@@ -120,10 +147,12 @@ export function useChat() {
   }, [activeConversationId]);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, overrideArchetypeId?: string) => {
       if (isStreaming || !content.trim()) {
         return;
       }
+
+      const effectiveArchetypeId = overrideArchetypeId ?? archetypeId;
 
       setIsStreaming(true);
       setStreamingContent("");
@@ -141,6 +170,7 @@ export function useChat() {
           body: JSON.stringify({
             content,
             conversationId: activeConversationId ?? undefined,
+            archetypeId: effectiveArchetypeId ?? undefined,
           }),
           signal: abortController.signal,
         });
@@ -154,7 +184,14 @@ export function useChat() {
         if (!activeConversationId && conversationId) {
           skipNextFetchRef.current = true;
           setActiveConversationId(conversationId);
-          const title = content.length > 50 ? `${content.substring(0, 50)}...` : content;
+          const matchedArchetype = effectiveArchetypeId
+            ? ARCHETYPES.find((a) => a.id === effectiveArchetypeId)
+            : undefined;
+          const title = matchedArchetype
+            ? `Date: ${matchedArchetype.name}`
+            : content.length > 50
+              ? `${content.substring(0, 50)}...`
+              : content;
           addItem({ id: conversationId, title, updatedAt: new Date().toISOString() });
           setMessages((prev) =>
             prev.map((m) => (m.id === tempUserMessage.id ? { ...m, conversationId } : m)),
@@ -168,13 +205,24 @@ export function useChat() {
           throw new Error("No reader");
         }
 
-        const accumulated = await readSSEStream(reader, setStreamingContent);
+        const accumulated = await readSSEStream(
+          reader,
+          (text) => {
+            // Strip metadata tags from streaming content for display
+            setStreamingContent(effectiveArchetypeId ? stripMetadataTags(text) : text);
+          },
+          (scene) => {
+            // Forward scene events to the storyboard
+            onSceneRef.current?.(scene);
+          },
+        );
 
         if (accumulated) {
+          const cleanContent = effectiveArchetypeId ? stripMetadataTags(accumulated) : accumulated;
           const assistantMessage = makeTempMessage(
             conversationId ?? activeConversationId ?? "",
             "assistant",
-            accumulated,
+            cleanContent,
           );
           setMessages((prev) => [...prev, assistantMessage]);
         }
@@ -190,7 +238,7 @@ export function useChat() {
         setStreamingContent("");
       }
     },
-    [activeConversationId, isStreaming, addItem, updateItem],
+    [activeConversationId, isStreaming, archetypeId, addItem, updateItem],
   );
 
   const selectConversation = useCallback((id: string) => {
@@ -204,6 +252,7 @@ export function useChat() {
     setActiveConversationId(null);
     setMessages([]);
     setStreamingContent("");
+    setArchetypeId(null);
   }, []);
 
   const renameConversation = useCallback(
@@ -232,6 +281,7 @@ export function useChat() {
         if (activeConversationId === id) {
           setActiveConversationId(null);
           setMessages([]);
+          setArchetypeId(null);
         }
       } catch {
         toast.error("Failed to delete conversation");
@@ -240,6 +290,10 @@ export function useChat() {
     [activeConversationId, removeItem],
   );
 
+  const setOnSceneCallback = useCallback((cb: ((scene: SceneEvent) => void) | null) => {
+    onSceneRef.current = cb;
+  }, []);
+
   return {
     conversations,
     activeConversationId,
@@ -247,10 +301,13 @@ export function useChat() {
     isStreaming,
     isLoadingMessages,
     streamingContent,
+    archetypeId,
     sendMessage,
     selectConversation,
     createNewChat,
     renameConversation,
     deleteConversation,
+    setArchetypeId,
+    setOnSceneCallback,
   };
 }

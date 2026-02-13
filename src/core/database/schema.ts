@@ -85,3 +85,22 @@ export const chatMessages = pgTable(t("chat_messages"), {
   content: text("content").notNull(),
   ...timestamps,
 });
+
+/**
+ * Storyboard scenes table - stores AI-generated scene images for Date Night conversations.
+ * Each scene captures a moment: the visual description, mood, date's inner thought, and generated image.
+ */
+export const storyboardScenes = pgTable(t("storyboard_scenes"), {
+  id: uuid("id").primaryKey().defaultRandom(),
+  conversationId: uuid("conversation_id")
+    .notNull()
+    .references(() => chatConversations.id, { onDelete: "cascade" }),
+  messageId: uuid("message_id"),
+  sceneDescription: text("scene_description").notNull(),
+  mood: text("mood").notNull(),
+  thought: text("thought"),
+  imageUrl: text("image_url"),
+  leonardoGenerationId: text("leonardo_generation_id"),
+  status: text("status").notNull().default("pending"),
+  ...timestamps,
+});

@@ -46,6 +46,9 @@ export const env = {
   // OpenRouter config (LLM)
   OPENROUTER_API_KEY: getRequiredEnv("OPENROUTER_API_KEY"),
   OPENROUTER_MODEL: getOptionalEnv("OPENROUTER_MODEL", "anthropic/claude-haiku-4.5"),
+
+  // Leonardo AI config (image generation)
+  LEONARDO_AI_API_KEY: getRequiredEnv("LEONARDO_AI_API_KEY"),
 } as const;
 
 export type Env = typeof env;

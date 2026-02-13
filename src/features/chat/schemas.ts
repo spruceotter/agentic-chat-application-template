@@ -6,6 +6,7 @@ export const SendMessageSchema = z.object({
     .min(1, "Content must be at least 1 character")
     .max(10000, "Content must be at most 10000 characters"),
   conversationId: z.string().uuid().optional(),
+  archetypeId: z.string().optional(),
 });
 
 export type SendMessageInput = z.infer<typeof SendMessageSchema>;

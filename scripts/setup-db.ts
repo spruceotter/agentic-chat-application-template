@@ -85,11 +85,29 @@ async function setup() {
   `);
   console.log(`  ${p("chat_messages")}`);
 
+  // 5. Storyboard scenes table
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS "${p("storyboard_scenes")}" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "conversation_id" uuid NOT NULL REFERENCES "${p("chat_conversations")}"("id") ON DELETE CASCADE,
+      "message_id" uuid,
+      "scene_description" text NOT NULL,
+      "mood" text NOT NULL,
+      "thought" text,
+      "image_url" text,
+      "leonardo_generation_id" text,
+      "status" text NOT NULL DEFAULT 'pending',
+      "created_at" timestamp DEFAULT now() NOT NULL,
+      "updated_at" timestamp DEFAULT now() NOT NULL
+    )
+  `);
+  console.log(`  ${p("storyboard_scenes")}`);
+
   console.log("\nDone! All tables created.");
 
   if (prefix) {
     console.log(
-      `\nYour tables: ${p("projects")}, ${p("chat_conversations")}, ${p("chat_messages")}`,
+      `\nYour tables: ${p("projects")}, ${p("chat_conversations")}, ${p("chat_messages")}, ${p("storyboard_scenes")}`,
     );
     console.log("Shared table: users");
   }

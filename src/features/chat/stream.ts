@@ -7,10 +7,13 @@ import type { Message } from "./models";
 
 const logger = getLogger("chat.stream");
 
-export function buildMessages(history: Message[]): Array<{ role: string; content: string }> {
+export function buildMessages(
+  history: Message[],
+  systemPrompt?: string,
+): Array<{ role: string; content: string }> {
   const limitedHistory = history.slice(-MAX_CONTEXT_MESSAGES);
   return [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt ?? SYSTEM_PROMPT },
     ...limitedHistory.map((m) => ({ role: m.role, content: m.content })),
   ];
 }
@@ -50,6 +53,7 @@ function parseSSELine(line: string): ParsedSSELine {
 export async function streamChatCompletion(
   history: Message[],
   signal?: AbortSignal,
+  systemPrompt?: string,
 ): Promise<{ stream: ReadableStream; fullResponse: Promise<string> }> {
   logger.info({ messageCount: history.length }, "stream.chat_started");
 
@@ -63,7 +67,7 @@ export async function streamChatCompletion(
       },
       body: JSON.stringify({
         model: env.OPENROUTER_MODEL,
-        messages: buildMessages(history),
+        messages: buildMessages(history, systemPrompt),
         stream: true,
       }),
       signal: signal ?? null,

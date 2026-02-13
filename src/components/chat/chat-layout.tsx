@@ -1,11 +1,14 @@
 "use client";
 
-import { MessageSquare } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { ARCHETYPES } from "@/features/storyboard/constants";
 import { useChat } from "@/hooks/use-chat";
+import { useStoryboard } from "@/hooks/use-storyboard";
 
+import { ArchetypeSelector } from "../storyboard/archetype-selector";
+import { StoryboardViewport } from "../storyboard/storyboard-viewport";
 import { ChatHeader } from "./chat-header";
 import { ChatInput } from "./chat-input";
 import { ChatSidebar } from "./chat-sidebar";
@@ -19,14 +22,33 @@ export function ChatLayout() {
     isStreaming,
     isLoadingMessages,
     streamingContent,
+    archetypeId,
     sendMessage,
     selectConversation,
     createNewChat,
     renameConversation,
     deleteConversation,
+    setArchetypeId,
+    setOnSceneCallback,
   } = useChat();
 
+  const { currentScene, isGenerating, handleNewScene } = useStoryboard(activeConversationId);
+
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  // Look up the selected archetype for its preview image
+  const selectedArchetype = useMemo(
+    () => ARCHETYPES.find((a) => a.id === archetypeId),
+    [archetypeId],
+  );
+
+  // Wire up the scene callback so useChat can forward scene events to useStoryboard
+  useEffect(() => {
+    setOnSceneCallback(handleNewScene);
+    return () => {
+      setOnSceneCallback(null);
+    };
+  }, [setOnSceneCallback, handleNewScene]);
 
   const activeTitle = conversations.find((c) => c.id === activeConversationId)?.title ?? null;
 
@@ -38,7 +60,31 @@ export function ChatLayout() {
     setIsMobileOpen(false);
   }, []);
 
+  const handleArchetypeSelect = useCallback(
+    (id: string) => {
+      setArchetypeId(id);
+      // Send an opening message to kick off the date
+      void sendMessage("Hey! Nice to meet you. So... what brings you here tonight?", id);
+    },
+    [setArchetypeId, sendMessage],
+  );
+
   const hasMessages = messages.length > 0 || isStreaming;
+  const isDateNightMode = !!archetypeId || !!currentScene;
+
+  // Build a fallback scene from the archetype preview image if no scene exists yet
+  const displayScene =
+    currentScene ??
+    (selectedArchetype
+      ? {
+          id: "preview",
+          mood: "happy",
+          thought: null,
+          imageUrl: selectedArchetype.previewImageUrl,
+          status: "complete",
+          sceneDescription: `Meet ${selectedArchetype.name}`,
+        }
+      : null);
 
   return (
     <div className="flex h-screen">
@@ -66,36 +112,40 @@ export function ChatLayout() {
               <div className="flex flex-row-reverse gap-3 px-4 py-3">
                 <Skeleton className="h-10 w-1/2 rounded-2xl" />
               </div>
-              <div className="flex gap-3 px-4 py-3">
-                <Skeleton className="size-8 shrink-0 rounded-full" />
-                <Skeleton className="h-24 w-2/3 rounded-2xl" />
-              </div>
-              <div className="flex flex-row-reverse gap-3 px-4 py-3">
-                <Skeleton className="h-10 w-2/5 rounded-2xl" />
-              </div>
             </div>
           </div>
         ) : hasMessages ? (
-          <MessageList
-            messages={messages}
-            streamingContent={streamingContent}
-            isStreaming={isStreaming}
-          />
-        ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
-            <div className="bg-primary/10 flex size-16 items-center justify-center rounded-2xl">
-              <MessageSquare className="text-primary size-8" />
+          <div className="flex flex-1 overflow-hidden">
+            {/* Chat panel */}
+            <div className={`flex flex-col ${isDateNightMode ? "w-[55%]" : "flex-1"}`}>
+              <MessageList
+                messages={messages}
+                streamingContent={streamingContent}
+                isStreaming={isStreaming}
+              />
+              <ChatInput onSend={sendMessage} disabled={isStreaming} />
             </div>
-            <div className="text-center">
-              <h2 className="text-xl font-semibold">How can I help you today?</h2>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Start a conversation by typing a message below.
-              </p>
-            </div>
+
+            {/* Storyboard viewport — only in Date Night mode */}
+            {isDateNightMode && (
+              <div className="border-border hidden w-[45%] border-l md:block">
+                <StoryboardViewport scene={displayScene} isGenerating={isGenerating} />
+              </div>
+            )}
           </div>
+        ) : (
+          <ArchetypeSelector onSelect={handleArchetypeSelect} />
         )}
 
-        <ChatInput onSend={sendMessage} disabled={isStreaming} />
+        {/* Show input at bottom when no messages and not in loading state */}
+        {!hasMessages && !isLoadingMessages && (
+          <div className="p-4">
+            <div className="text-muted-foreground text-center text-xs">
+              Or type a message below for regular chat
+            </div>
+            <ChatInput onSend={sendMessage} disabled={isStreaming} />
+          </div>
+        )}
       </div>
     </div>
   );
