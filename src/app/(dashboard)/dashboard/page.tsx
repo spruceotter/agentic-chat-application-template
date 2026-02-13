@@ -1,6 +1,8 @@
+import { Coins, MessageSquare } from "lucide-react";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/core/supabase/server";
-import { getProjectCount } from "@/features/projects";
+import { getTokenBalance } from "@/features/billing";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -8,7 +10,7 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const projectCount = user ? await getProjectCount(user.id) : 0;
+  const balance = user ? await getTokenBalance(user.id) : 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -30,10 +32,6 @@ export default async function DashboardPage() {
                 <dd className="font-medium">{user?.email}</dd>
               </div>
               <div>
-                <dt className="text-sm text-muted-foreground">User ID</dt>
-                <dd className="font-mono text-sm">{user?.id}</dd>
-              </div>
-              <div>
                 <dt className="text-sm text-muted-foreground">Last Sign In</dt>
                 <dd className="text-sm">
                   {user?.last_sign_in_at
@@ -47,22 +45,34 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Projects</CardTitle>
-            <CardDescription>Your projects</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Coins className="size-5" />
+              Tokens
+            </CardTitle>
+            <CardDescription>Your token balance</CardDescription>
           </CardHeader>
           <CardContent>
-            {projectCount > 0 ? (
-              <p className="text-sm text-muted-foreground">
-                You have {projectCount} project{projectCount === 1 ? "" : "s"}.
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">No projects yet.</p>
-            )}
-            <a
-              href="/dashboard/projects"
-              className="mt-4 inline-block text-sm text-primary hover:underline"
-            >
-              Manage projects &rarr;
+            <p className="text-3xl font-bold tabular-nums">{balance}</p>
+            <a href="/billing" className="mt-4 inline-block text-sm text-primary hover:underline">
+              Manage tokens &rarr;
+            </a>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="size-5" />
+              Chat
+            </CardTitle>
+            <CardDescription>AI conversation</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Each message costs 1 token. Start chatting to use your tokens.
+            </p>
+            <a href="/" className="mt-4 inline-block text-sm text-primary hover:underline">
+              Start chatting &rarr;
             </a>
           </CardContent>
         </Card>

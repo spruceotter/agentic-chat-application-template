@@ -14,9 +14,15 @@ interface ChatMessage {
   updatedAt: string;
 }
 
+interface UseChatOptions {
+  onTokenConsumed?: () => void;
+  onTokenRefunded?: () => void;
+}
+
 async function readSSEStream(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   onChunk: (accumulated: string) => void,
+  onRefund?: () => void,
 ): Promise<string> {
   const decoder = new TextDecoder();
   let accumulated = "";
@@ -44,6 +50,11 @@ async function readSSEStream(
           type?: string;
           message?: string;
         };
+        if (parsed.type === "refund") {
+          toast.info(parsed.message ?? "Response failed, token refunded");
+          onRefund?.();
+          continue;
+        }
         if (parsed.type === "error") {
           toast.error(parsed.message ?? "Response may not have been saved");
           continue;
@@ -75,7 +86,7 @@ function makeTempMessage(conversationId: string, role: string, content: string):
   };
 }
 
-export function useChat() {
+export function useChat(options?: UseChatOptions) {
   const {
     items: conversations,
     addItem,
@@ -88,10 +99,18 @@ export function useChat() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const abortControllerRef = useRef<AbortController | null>(null);
+  const skipNextFetchRef = useRef(false);
 
   useEffect(() => {
     if (!activeConversationId) {
       setMessages([]);
+      return;
+    }
+
+    // Skip fetching when we just created this conversation via sendMessage
+    // — we already have the messages in state
+    if (skipNextFetchRef.current) {
+      skipNextFetchRef.current = false;
       return;
     }
 
@@ -139,13 +158,24 @@ export function useChat() {
           signal: abortController.signal,
         });
 
+        if (res.status === 402) {
+          // Insufficient tokens — remove the optimistic user message
+          setMessages((prev) => prev.filter((m) => m.id !== tempUserMessage.id));
+          toast.error("Insufficient tokens — purchase more to continue");
+          return;
+        }
+
         if (!res.ok) {
           throw new Error("Failed to send message");
         }
 
+        // Notify token consumed
+        options?.onTokenConsumed?.();
+
         const conversationId = res.headers.get("X-Conversation-Id");
 
         if (!activeConversationId && conversationId) {
+          skipNextFetchRef.current = true;
           setActiveConversationId(conversationId);
           const title = content.length > 50 ? `${content.substring(0, 50)}...` : content;
           addItem({ id: conversationId, title, updatedAt: new Date().toISOString() });
@@ -161,7 +191,11 @@ export function useChat() {
           throw new Error("No reader");
         }
 
-        const accumulated = await readSSEStream(reader, setStreamingContent);
+        const accumulated = await readSSEStream(
+          reader,
+          setStreamingContent,
+          options?.onTokenRefunded,
+        );
 
         if (accumulated) {
           const assistantMessage = makeTempMessage(
@@ -183,7 +217,7 @@ export function useChat() {
         setStreamingContent("");
       }
     },
-    [activeConversationId, isStreaming, addItem, updateItem],
+    [activeConversationId, isStreaming, addItem, updateItem, options],
   );
 
   const selectConversation = useCallback((id: string) => {

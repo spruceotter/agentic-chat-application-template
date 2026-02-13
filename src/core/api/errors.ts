@@ -9,7 +9,7 @@ const logger = getLogger("api.errors");
 /**
  * Valid HTTP status codes for API errors.
  */
-export type HttpStatusCode = 400 | 401 | 403 | 404 | 409 | 500 | 502;
+export type HttpStatusCode = 400 | 401 | 402 | 403 | 404 | 409 | 500 | 502;
 
 /**
  * Shape of errors that carry HTTP semantics.
@@ -21,7 +21,7 @@ interface HttpError {
   statusCode: HttpStatusCode;
 }
 
-const VALID_STATUS_CODES = new Set<HttpStatusCode>([400, 401, 403, 404, 409, 500, 502]);
+const VALID_STATUS_CODES = new Set<HttpStatusCode>([400, 401, 402, 403, 404, 409, 500, 502]);
 
 /**
  * Check if an error has HTTP error properties.
@@ -78,9 +78,11 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
     });
   }
 
-  // Handle unknown errors
+  // Handle unknown errors — include cause for DrizzleQueryError and similar wrappers
   const message = error instanceof Error ? error.message : "Unknown error";
-  logger.error({ error: message }, "api.internal_error");
+  const cause =
+    error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined;
+  logger.error({ error: message, cause }, "api.internal_error");
   return NextResponse.json(createErrorResponse("Internal server error", "INTERNAL_ERROR"), {
     status: 500,
   });

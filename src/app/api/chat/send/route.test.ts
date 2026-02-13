@@ -6,6 +6,7 @@ import type { Conversation, Message } from "@/features/chat";
 const mockConversation: Conversation = {
   id: "conv-123",
   title: "Test Conversation",
+  userId: null,
   createdAt: new Date("2024-01-01"),
   updatedAt: new Date("2024-01-01"),
 };
@@ -18,6 +19,28 @@ const mockMessage: Message = {
   createdAt: new Date("2024-01-01"),
   updatedAt: new Date("2024-01-01"),
 };
+
+const mockUser = { id: "user-123", email: "test@example.com" };
+
+// Mock Supabase auth
+mock.module("@/core/supabase/server", () => ({
+  createClient: mock(() =>
+    Promise.resolve({
+      auth: {
+        getUser: mock(() => Promise.resolve({ data: { user: mockUser } })),
+      },
+    }),
+  ),
+}));
+
+// Mock billing
+const mockConsumeToken = mock(() => Promise.resolve(9));
+const mockRefundToken = mock(() => Promise.resolve(10));
+
+mock.module("@/features/billing", () => ({
+  consumeToken: mockConsumeToken,
+  refundToken: mockRefundToken,
+}));
 
 // Mock the repository (database layer)
 const mockCreateConversation = mock(() => Promise.resolve(mockConversation));
@@ -62,6 +85,8 @@ describe("POST /api/chat/send", () => {
     mockFindMessagesByConversationId.mockClear();
     mockCreateMessage.mockClear();
     mockStreamChatCompletion.mockClear();
+    mockConsumeToken.mockClear();
+    mockRefundToken.mockClear();
   });
 
   it("returns SSE response with correct headers", async () => {
@@ -90,6 +115,18 @@ describe("POST /api/chat/send", () => {
     expect(response.headers.get("X-Conversation-Id")).toBe("conv-123");
   });
 
+  it("returns X-Token-Balance header", async () => {
+    const request = new NextRequest("http://localhost:3000/api/chat/send", {
+      method: "POST",
+      body: JSON.stringify({ content: "Hello" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const response = await POST(request);
+
+    expect(response.headers.get("X-Token-Balance")).toBe("9");
+  });
+
   it("creates new conversation when no conversationId provided", async () => {
     const request = new NextRequest("http://localhost:3000/api/chat/send", {
       method: "POST",
@@ -115,6 +152,18 @@ describe("POST /api/chat/send", () => {
     await POST(request);
 
     expect(mockCreateConversation).not.toHaveBeenCalled();
+  });
+
+  it("calls consumeToken before streaming", async () => {
+    const request = new NextRequest("http://localhost:3000/api/chat/send", {
+      method: "POST",
+      body: JSON.stringify({ content: "Hello" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    await POST(request);
+
+    expect(mockConsumeToken).toHaveBeenCalledWith("user-123", "conv-123");
   });
 
   it("returns 400 for empty content", async () => {

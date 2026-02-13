@@ -6,13 +6,13 @@ import { ChatInput } from "../chat-input";
 
 describe("ChatInput", () => {
   it("renders textarea and send button", () => {
-    render(<ChatInput onSend={() => {}} disabled={false} />);
+    render(<ChatInput onSend={() => {}} disabled={false} hasTokens={true} />);
     expect(screen.getByPlaceholderText("Type a message...")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Send message" })).toBeInTheDocument();
   });
 
   it("disables textarea and button when disabled", () => {
-    render(<ChatInput onSend={() => {}} disabled={true} />);
+    render(<ChatInput onSend={() => {}} disabled={true} hasTokens={true} />);
     expect(screen.getByPlaceholderText("Type a message...")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
   });
@@ -21,7 +21,7 @@ describe("ChatInput", () => {
     const onSend = mock(() => {});
     const user = userEvent.setup();
 
-    render(<ChatInput onSend={onSend} disabled={false} />);
+    render(<ChatInput onSend={onSend} disabled={false} hasTokens={true} />);
 
     const textarea = screen.getByPlaceholderText("Type a message...");
     await user.type(textarea, "Hello world");
@@ -35,7 +35,7 @@ describe("ChatInput", () => {
     const onSend = mock(() => {});
     const user = userEvent.setup();
 
-    render(<ChatInput onSend={onSend} disabled={false} />);
+    render(<ChatInput onSend={onSend} disabled={false} hasTokens={true} />);
 
     const textarea = screen.getByPlaceholderText("Type a message...");
     await user.type(textarea, "Hello{enter}");
@@ -47,7 +47,7 @@ describe("ChatInput", () => {
     const onSend = mock(() => {});
     const user = userEvent.setup();
 
-    render(<ChatInput onSend={onSend} disabled={false} />);
+    render(<ChatInput onSend={onSend} disabled={false} hasTokens={true} />);
 
     const textarea = screen.getByPlaceholderText("Type a message...");
     await user.type(textarea, "Hello{shift>}{enter}{/shift}");
@@ -59,7 +59,7 @@ describe("ChatInput", () => {
     const onSend = mock(() => {});
     const user = userEvent.setup();
 
-    render(<ChatInput onSend={onSend} disabled={false} />);
+    render(<ChatInput onSend={onSend} disabled={false} hasTokens={true} />);
 
     await user.click(screen.getByRole("button", { name: "Send message" }));
 

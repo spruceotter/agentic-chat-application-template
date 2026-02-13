@@ -2,7 +2,11 @@
 
 import { redirect } from "next/navigation";
 
+import { getLogger } from "@/core/logging";
 import { createClient } from "@/core/supabase/server";
+import { grantSignupTokens } from "@/features/billing";
+
+const logger = getLogger("auth.register");
 
 export interface RegisterState {
   error?: string;
@@ -47,6 +51,16 @@ export async function register(
 
   if (error) {
     return { error: error.message };
+  }
+
+  // Grant free signup tokens
+  if (data.user) {
+    try {
+      await grantSignupTokens(data.user.id);
+    } catch (tokenError) {
+      logger.error({ userId: data.user.id, error: tokenError }, "register.token_grant_failed");
+      // Don't fail signup if token grant fails
+    }
   }
 
   // Check if email confirmation is required
